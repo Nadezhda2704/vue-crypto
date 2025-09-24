@@ -1,5 +1,5 @@
 <template>
-  <div class="container">
+  <div class="container p-3">
     <section>
       <div class="flex">
         <div class="max-w-xs">
@@ -17,21 +17,17 @@
                 placeholder="Например DOGE"
             />
           </div>
-          <div class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap">
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              BTC
+          <div v-if="hints.length" class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap">
+            <span
+                v-for="hint of hints"
+                v-bind:key="hint"
+                @click="addHint(hint)"
+                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
+              {{ hint }}
             </span>
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              DOGE
-            </span>
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              BCH
-            </span>
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              CHD
-            </span>
+
           </div>
-          <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+          <div v-if="showError" class="text-sm text-red-600">Такой тикер уже добавлен</div>
         </div>
       </div>
       <button
@@ -142,26 +138,73 @@
 
 <script>
 
+import {nextTick} from "vue";
+
 export default {
   name: 'App',
   data() {
     return {
+      showError: false,
+      assets: [],
       ticker: null,
       tickers: [],
       sel: null,
+      hints: [],
       graph: []
     }
   },
 
+  created() {
+    this.getAssets();
+  },
+
+  watch: {
+    ticker(newTicker) {
+      this.showError = false
+      const value = newTicker.trim().toUpperCase()
+
+      const matches = this.assets.filter((item) => {
+        return item.startsWith(value)
+      })
+
+      this.hints = matches.slice(0, 4)
+    }
+  },
+
   methods: {
+    async getAssets() {
+      const f = await fetch('https://data-api.coindesk.com/onchain/v3/summary/by/chain?chain_asset=ETH&asset_lookup_priority=SYMBOL&api_key=348d258866399869cfc0b7ca7840570fdf6f6c0c6dd861059b69eebdf3936a82')
+      const data = await f.json()
+      this.assets = data.Data.ASSETS_SUPPORTED.map(item => item.SYMBOL.toUpperCase())
+    },
+
     add() {
       const currentTicker = {
         name: this.ticker,
         price: '-'
       }
 
-      this.tickers.push(currentTicker)
+      const tickersNames = this.tickers.map(item => item.name.toUpperCase());
+      const tickerName = this.ticker.toString().trim().toUpperCase();
 
+      if( !tickersNames.includes(tickerName) && this.assets.includes(tickerName) ) {
+        this.tickers.push(currentTicker)
+        this.ticker = ''
+      } else {
+        this.showError = true
+      }
+
+      this.checkingCurrency(currentTicker)
+    },
+
+    addHint(hint) {
+      this.ticker = hint
+      nextTick(() => {
+        this.add()
+      })
+    },
+
+    checkingCurrency(currentTicker) {
       setInterval(async () => {
         const key = `${currentTicker.name}-USD`;
         const f = await  fetch(
@@ -177,8 +220,6 @@ export default {
         }
 
       }, 5000)
-
-      this.ticker = ''
     },
 
     select(ticker) {
@@ -198,6 +239,6 @@ export default {
         return 5 + ( (item - minValue) * 95 ) / (maxValue - minValue)
       })
     }
-  }
+  },
 }
 </script>
