@@ -156,6 +156,15 @@ export default {
 
   created() {
     this.getAssets();
+    const tickersData = localStorage.getItem('tickersList')
+
+    if(tickersData) {
+      this.tickers = JSON.parse(tickersData)
+
+      this.tickers.forEach((ticker) => {
+        this.checkingCurrency(ticker.name)
+      })
+    }
   },
 
   watch: {
@@ -189,12 +198,13 @@ export default {
 
       if( !tickersNames.includes(tickerName) && this.assets.includes(tickerName) ) {
         this.tickers.push(currentTicker)
+        localStorage.setItem('tickersList', JSON.stringify(this.tickers))
         this.ticker = ''
       } else {
         this.showError = true
       }
 
-      this.checkingCurrency(currentTicker)
+      this.checkingCurrency(currentTicker.name)
     },
 
     addHint(hint) {
@@ -204,18 +214,18 @@ export default {
       })
     },
 
-    checkingCurrency(currentTicker) {
+    checkingCurrency(tickerName) {
       setInterval(async () => {
-        const key = `${currentTicker.name}-USD`;
+        const key = `${tickerName}-USD`;
         const f = await  fetch(
             `https://data-api.coindesk.com/index/cc/v1/latest/tick?market=ccix&instruments=${key}&api_key=348d258866399869cfc0b7ca7840570fdf6f6c0c6dd861059b69eebdf3936a82`
         )
 
         const data = await f.json()
         const price = data.Data[key]?.VALUE;
-        this.tickers.find(t => t.name === currentTicker.name).price = price > 1 ? price.toFixed(2) : price.toPrecision(2)
+        this.tickers.find(t => t.name === tickerName).price = price > 1 ? price.toFixed(2) : price.toPrecision(2)
 
-        if(this.sel?.name === currentTicker?.name) {
+        if(this.sel?.name === tickerName) {
           this.graph.push(price)
         }
 
