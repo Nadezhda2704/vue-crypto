@@ -27,7 +27,8 @@
             </span>
 
           </div>
-          <div v-if="showError" class="text-sm text-red-600">Такой тикер уже добавлен</div>
+          <div v-if="showErrorExist" class="text-sm text-red-600">Такой тикер уже добавлен</div>
+          <div v-if="showErrorCorrect" class="text-sm text-red-600">Валюта не найдена</div>
         </div>
       </div>
       <button
@@ -54,9 +55,37 @@
 
     <template v-if="tickers.length">
       <hr class="w-full border-t border-gray-600 my-4" />
+      <div>
+        <button
+            @click="page = page - 1"
+            v-if="page > 1"
+            type="button"
+            class="my-4 mr-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >Назад</button>
+        <button
+            @click="page = page + 1"
+            v-if="hasNextPage"
+            type="button"
+            class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >Вперед</button>
+
+        <div>
+          <label for="filter">Фильтр:</label>
+          <input
+              v-model="filter"
+              type="text"
+              name="filter"
+              id="filter"
+              class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
+              placeholder="Например DOGE"
+          >
+        </div>
+
+      </div>
+      <hr class="w-full border-t border-gray-600 my-4" />
       <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div
-            v-for="(t, i) in tickers"
+            v-for="(t, i) in filteredTickers()"
             :key="i"
             @click="select(t)"
             :class="{
@@ -144,17 +173,31 @@ export default {
   name: 'App',
   data() {
     return {
-      showError: false,
+      showErrorExist: false,
+      showErrorCorrect: false,
       assets: [],
       ticker: null,
       tickers: [],
       sel: null,
       hints: [],
-      graph: []
+      graph: [],
+      page: 1,
+      filter: '',
+      hasNextPage: true,
     }
   },
 
   created() {
+    const windowData = Object.fromEntries(new URL(window.location).searchParams.entries())
+
+    if (windowData.filter) {
+      this.filter = windowData.filter
+    }
+
+    if (windowData.page) {
+      this.page = +windowData.page
+    }
+
     this.getAssets();
     const tickersData = localStorage.getItem('tickersList')
 
@@ -169,7 +212,8 @@ export default {
 
   watch: {
     ticker(newTicker) {
-      this.showError = false
+      this.showErrorExist = false
+      this.showErrorCorrect = false
       const value = newTicker.trim().toUpperCase()
 
       const matches = this.assets.filter((item) => {
@@ -177,14 +221,45 @@ export default {
       })
 
       this.hints = matches.slice(0, 4)
+    },
+
+    filter() {
+      this.page = 1
+      const { pathname } = window.location
+      window.history.pushState(
+          null,
+          document.title,
+          `${pathname}?filter=${this.filter}&page=${this.page}`
+      )
+    },
+
+    page() {
+      const { pathname } = window.location
+      window.history.pushState(
+          null,
+          document.title,
+          `${pathname}?filter=${this.filter}&page=${this.page}`
+      )
     }
   },
 
   methods: {
     async getAssets() {
-      const f = await fetch('https://data-api.coindesk.com/onchain/v3/summary/by/chain?chain_asset=ETH&asset_lookup_priority=SYMBOL&api_key=348d258866399869cfc0b7ca7840570fdf6f6c0c6dd861059b69eebdf3936a82')
+      const f = await fetch('https://data-api.coindesk.com/onchain/v3/summary/by/chain?chain_asset=ETH&asset_lookup_priority=SYMBOL')
       const data = await f.json()
       this.assets = data.Data.ASSETS_SUPPORTED.map(item => item.SYMBOL.toUpperCase())
+    },
+
+    filteredTickers() {
+      const start = (this.page - 1)*6;
+      const end = this.page*6;
+
+      const filteredTickers = this.tickers
+          .filter(ticker => ticker.name.includes(this.filter.trim().toUpperCase()) )
+
+      this.hasNextPage = filteredTickers.length > end
+
+      return filteredTickers.slice(start, end)
     },
 
     add() {
@@ -193,6 +268,7 @@ export default {
         price: '-'
       }
 
+      this.filter = ''
       const tickersNames = this.tickers.map(item => item.name.toUpperCase());
       const tickerName = this.ticker.toString().trim().toUpperCase();
 
@@ -200,11 +276,12 @@ export default {
         this.tickers.push(currentTicker)
         localStorage.setItem('tickersList', JSON.stringify(this.tickers))
         this.ticker = ''
+        this.checkingCurrency(currentTicker.name)
+      } else if (!this.assets.includes(tickerName)) {
+        this.showErrorCorrect = true
       } else {
-        this.showError = true
+        this.showErrorExist = true
       }
-
-      this.checkingCurrency(currentTicker.name)
     },
 
     addHint(hint) {
@@ -215,18 +292,25 @@ export default {
     },
 
     checkingCurrency(tickerName) {
-      setInterval(async () => {
+      const idInterval = setInterval(async () => {
         const key = `${tickerName}-USD`;
-        const f = await  fetch(
-            `https://data-api.coindesk.com/index/cc/v1/latest/tick?market=ccix&instruments=${key}&api_key=348d258866399869cfc0b7ca7840570fdf6f6c0c6dd861059b69eebdf3936a82`
-        )
 
-        const data = await f.json()
-        const price = data.Data[key]?.VALUE;
-        this.tickers.find(t => t.name === tickerName).price = price > 1 ? price.toFixed(2) : price.toPrecision(2)
+        try {
+          const f = await  fetch(
+              `https://data-api.coindesk.com/index/cc/v1/latest/tick?market=ccix&instruments=${key}&api_key=68f431bbe1a226aab5524777981312ed55763bbaaea26b9191e28831d786fa25`
+          )
 
-        if(this.sel?.name === tickerName) {
-          this.graph.push(price)
+          const data = await f.json()
+          const price = data.Data[key]?.VALUE;
+          this.tickers.find(t => t.name === tickerName).price = price > 1 ? price.toFixed(2) : price.toPrecision(2)
+
+          if(this.sel?.name === tickerName) {
+            this.graph.push(price)
+          }
+        } catch (err) {
+          console.error(err)
+          clearInterval(idInterval)
+
         }
 
       }, 5000)
@@ -239,6 +323,7 @@ export default {
 
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((item) => item !== tickerToRemove)
+      localStorage.setItem('tickersList', JSON.stringify(this.tickers))
     },
 
     normalizeGraph() {
