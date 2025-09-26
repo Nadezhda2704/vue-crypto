@@ -85,11 +85,11 @@
       <hr class="w-full border-t border-gray-600 my-4" />
       <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div
-            v-for="(t, i) in filteredTickers()"
+            v-for="(t, i) in tickersInCurrentPage"
             :key="i"
             @click="select(t)"
             :class="{
-              'border-4': sel === t
+              'border-4': selectedTicker === t
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
         >
@@ -124,20 +124,20 @@
       <hr class="w-full border-t border-gray-600 my-4" />
     </template>
 
-    <section v-if="sel" class="relative">
+    <section v-if="selectedTicker" class="relative">
       <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-        {{ sel.name }} - USD
+        {{ selectedTicker.name }} - USD
       </h3>
       <div class="flex items-end border-gray-600 border-b border-l h-64">
         <div
-            v-for="(bar, idx) in normalizeGraph()"
+            v-for="(bar, idx) in normalizedGraph"
             :key="idx"
             :style="{ height: `${bar}%` }"
             class="bg-purple-800 border w-10"
         ></div>
       </div>
       <button
-          @click="sel = null"
+          @click="selectedTicker = null"
           type="button"
           class="absolute top-0 right-0"
       >
@@ -173,17 +173,16 @@ export default {
   name: 'App',
   data() {
     return {
-      showErrorExist: false,
-      showErrorCorrect: false,
-      assets: [],
       ticker: null,
+      filter: '',
       tickers: [],
-      sel: null,
+      selectedTicker: null,
+      assets: [],
       hints: [],
       graph: [],
       page: 1,
-      filter: '',
-      hasNextPage: true,
+      showErrorExist: false,
+      showErrorCorrect: false,
     }
   },
 
@@ -210,37 +209,47 @@ export default {
     }
   },
 
-  watch: {
-    ticker(newTicker) {
-      this.showErrorExist = false
-      this.showErrorCorrect = false
-      const value = newTicker.trim().toUpperCase()
+  computed: {
+    start() {
+      return (this.page - 1)*6
+    },
+    end() {
+      return this.page*6
+    },
 
-      const matches = this.assets.filter((item) => {
-        return item.startsWith(value)
+    filteredTickers() {
+      return this.tickers
+          .filter(ticker => ticker.name.includes(this.filter.trim().toUpperCase()) )
+    },
+
+    tickersInCurrentPage() {
+      return this.filteredTickers.slice(this.start, this.end)
+    },
+
+    hasNextPage() {
+      return this.filteredTickers.length > this.end
+    },
+
+    normalizedGraph() {
+      const maxValue = Math.max(...this.graph)
+      const minValue = Math.min(...this.graph)
+
+      if( maxValue === minValue ) {
+        return this.graph.map(() => 50)
+      }
+
+      return this.graph.map((item) => {
+        return 5 + ( (item - minValue) * 95 ) / (maxValue - minValue)
       })
-
-      this.hints = matches.slice(0, 4)
     },
 
-    filter() {
-      this.page = 1
-      const { pathname } = window.location
-      window.history.pushState(
-          null,
-          document.title,
-          `${pathname}?filter=${this.filter}&page=${this.page}`
-      )
-    },
-
-    page() {
-      const { pathname } = window.location
-      window.history.pushState(
-          null,
-          document.title,
-          `${pathname}?filter=${this.filter}&page=${this.page}`
-      )
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page
+      };
     }
+
   },
 
   methods: {
@@ -248,18 +257,6 @@ export default {
       const f = await fetch('https://data-api.coindesk.com/onchain/v3/summary/by/chain?chain_asset=ETH&asset_lookup_priority=SYMBOL')
       const data = await f.json()
       this.assets = data.Data.ASSETS_SUPPORTED.map(item => item.SYMBOL.toUpperCase())
-    },
-
-    filteredTickers() {
-      const start = (this.page - 1)*6;
-      const end = this.page*6;
-
-      const filteredTickers = this.tickers
-          .filter(ticker => ticker.name.includes(this.filter.trim().toUpperCase()) )
-
-      this.hasNextPage = filteredTickers.length > end
-
-      return filteredTickers.slice(start, end)
     },
 
     add() {
@@ -273,8 +270,7 @@ export default {
       const tickerName = this.ticker.toString().trim().toUpperCase();
 
       if( !tickersNames.includes(tickerName) && this.assets.includes(tickerName) ) {
-        this.tickers.push(currentTicker)
-        localStorage.setItem('tickersList', JSON.stringify(this.tickers))
+        this.tickers = [...this.tickers, currentTicker]
         this.ticker = ''
         this.checkingCurrency(currentTicker.name)
       } else if (!this.assets.includes(tickerName)) {
@@ -304,7 +300,7 @@ export default {
           const price = data.Data[key]?.VALUE;
           this.tickers.find(t => t.name === tickerName).price = price > 1 ? price.toFixed(2) : price.toPrecision(2)
 
-          if(this.sel?.name === tickerName) {
+          if(this.selectedTicker?.name === tickerName) {
             this.graph.push(price)
           }
         } catch (err) {
@@ -317,22 +313,55 @@ export default {
     },
 
     select(ticker) {
-      this.sel = ticker
-      this.graph = []
+      this.selectedTicker = ticker
     },
 
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((item) => item !== tickerToRemove)
+      if (this.selectedTicker === tickerToRemove) {
+        this.selectedTicker = null;
+      }
+    },
+  },
+
+  watch: {
+    selectedTicker() {
+      this.graph = []
+    },
+
+    tickers() {
       localStorage.setItem('tickersList', JSON.stringify(this.tickers))
     },
 
-    normalizeGraph() {
-      const maxValue = Math.max(...this.graph)
-      const minValue = Math.min(...this.graph)
+    tickersInCurrentPage() {
+      if (this.tickersInCurrentPage.length === 0 && this.page > 1 ) {
+        this.page -= 1
+      }
+    },
 
-      return this.graph.map((item) => {
-        return 5 + ( (item - minValue) * 95 ) / (maxValue - minValue)
+    ticker(newTicker) {
+      this.showErrorExist = false
+      this.showErrorCorrect = false
+      const value = newTicker.trim().toUpperCase()
+
+      const matches = this.assets.filter((item) => {
+        return item.startsWith(value)
       })
+
+      this.hints = matches.slice(0, 4)
+    },
+
+    filter() {
+      this.page = 1
+    },
+
+    pageStateOptions(value) {
+      const { pathname } = window.location
+      window.history.pushState(
+          null,
+          document.title,
+          `${pathname}?filter=${value.filter}&page=${value.page}`
+      )
     }
   },
 }
