@@ -98,7 +98,7 @@
               {{ t.name }} - USD
             </dt>
             <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {{ t.price }}
+              {{ formatPrice(t.price) }}
             </dd>
           </div>
           <div class="w-full border-t border-gray-200"></div>
@@ -168,9 +168,11 @@
 <script>
 
 import {nextTick} from "vue";
+import {subscribeToTicker, unsubscribeFromTicker} from "@/api";
 
 export default {
   name: 'App',
+
   data() {
     return {
       ticker: null,
@@ -203,9 +205,11 @@ export default {
     if(tickersData) {
       this.tickers = JSON.parse(tickersData)
 
-      this.tickers.forEach((ticker) => {
-        this.checkingCurrency(ticker.name)
-      })
+      this.tickers.forEach(ticker => {
+        subscribeToTicker(ticker.name, newPrice =>
+            this.updateTicker(ticker.name, newPrice)
+        );
+      });
     }
   },
 
@@ -253,6 +257,17 @@ export default {
   },
 
   methods: {
+    updateTicker(tickerName, price) {
+      this.tickers
+          .filter(t => t.name === tickerName)
+          .forEach(t => {
+            if (t === this.selectedTicker) {
+              this.graph.push(price);
+            }
+            t.price = price;
+          });
+    },
+
     async getAssets() {
       const f = await fetch('https://data-api.coindesk.com/onchain/v3/summary/by/chain?chain_asset=ETH&asset_lookup_priority=SYMBOL')
       const data = await f.json()
@@ -272,7 +287,10 @@ export default {
       if( !tickersNames.includes(tickerName) && this.assets.includes(tickerName) ) {
         this.tickers = [...this.tickers, currentTicker]
         this.ticker = ''
-        this.checkingCurrency(currentTicker.name)
+
+        subscribeToTicker(currentTicker.name, newPrice =>
+            this.updateTicker(currentTicker.name, newPrice)
+        );
       } else if (!this.assets.includes(tickerName)) {
         this.showErrorCorrect = true
       } else {
@@ -287,29 +305,11 @@ export default {
       })
     },
 
-    checkingCurrency(tickerName) {
-      const idInterval = setInterval(async () => {
-        const key = `${tickerName}-USD`;
-
-        try {
-          const f = await  fetch(
-              `https://data-api.coindesk.com/index/cc/v1/latest/tick?market=ccix&instruments=${key}&api_key=68f431bbe1a226aab5524777981312ed55763bbaaea26b9191e28831d786fa25`
-          )
-
-          const data = await f.json()
-          const price = data.Data[key]?.VALUE;
-          this.tickers.find(t => t.name === tickerName).price = price > 1 ? price.toFixed(2) : price.toPrecision(2)
-
-          if(this.selectedTicker?.name === tickerName) {
-            this.graph.push(price)
-          }
-        } catch (err) {
-          console.error(err)
-          clearInterval(idInterval)
-
-        }
-
-      }, 5000)
+    formatPrice(price) {
+      if(price === '-') {
+        return price
+      }
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2)
     },
 
     select(ticker) {
@@ -321,6 +321,7 @@ export default {
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(tickerToRemove.name);
     },
   },
 
