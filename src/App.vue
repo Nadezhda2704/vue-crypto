@@ -28,7 +28,6 @@
 
           </div>
           <div v-if="showErrorExist" class="text-sm text-red-600">Такой тикер уже добавлен</div>
-          <div v-if="showErrorCorrect" class="text-sm text-red-600">Валюта не найдена</div>
         </div>
       </div>
       <button
@@ -36,7 +35,6 @@
           type="button"
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
       >
-        <!-- Heroicon name: solid/mail -->
         <svg
             class="-ml-0.5 mr-2 h-6 w-6"
             xmlns="http://www.w3.org/2000/svg"
@@ -68,7 +66,9 @@
             type="button"
             class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >Вперед</button>
+      </div>
 
+      <div class="flex justify-between items-center">
         <div>
           <label for="filter">Фильтр:</label>
           <input
@@ -81,17 +81,25 @@
           >
         </div>
 
+        <button
+            @click="deleteAll()"
+            type="button"
+            class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >Удалить все</button>
       </div>
+
       <hr class="w-full border-t border-gray-600 my-4" />
+
       <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div
             v-for="(t, i) in tickersInCurrentPage"
             :key="i"
             @click="select(t)"
             :class="{
-              'border-4': selectedTicker === t
+              'border-4': selectedTicker === t,
+              'bg-red-100': t.price === '-'
             }"
-            class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
+            class="overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
         >
           <div class="px-4 py-5 sm:p-6 text-center">
             <dt class="text-sm font-medium text-gray-500 truncate">
@@ -121,6 +129,7 @@
           </button>
         </div>
       </dl>
+
       <hr class="w-full border-t border-gray-600 my-4" />
     </template>
 
@@ -184,7 +193,6 @@ export default {
       graph: [],
       page: 1,
       showErrorExist: false,
-      showErrorCorrect: false,
     }
   },
 
@@ -259,13 +267,13 @@ export default {
   methods: {
     updateTicker(tickerName, price) {
       this.tickers
-          .filter(t => t.name === tickerName)
-          .forEach(t => {
-            if (t === this.selectedTicker) {
-              this.graph.push(price);
-            }
-            t.price = price;
-          });
+        .filter(t => t.name === tickerName)
+        .forEach(t => {
+          if (t === this.selectedTicker) {
+            this.graph.push(price);
+          }
+          t.price = price;
+        });
     },
 
     async getAssets() {
@@ -275,24 +283,22 @@ export default {
     },
 
     add() {
-      const currentTicker = {
-        name: this.ticker,
-        price: '-'
-      }
-
       this.filter = ''
       const tickersNames = this.tickers.map(item => item.name.toUpperCase());
       const tickerName = this.ticker.toString().trim().toUpperCase();
 
-      if( !tickersNames.includes(tickerName) && this.assets.includes(tickerName) ) {
+      const currentTicker = {
+        name: tickerName,
+        price: '-'
+      }
+
+      if( !tickersNames.includes(tickerName) ) {
         this.tickers = [...this.tickers, currentTicker]
         this.ticker = ''
 
         subscribeToTicker(currentTicker.name, newPrice =>
             this.updateTicker(currentTicker.name, newPrice)
         );
-      } else if (!this.assets.includes(tickerName)) {
-        this.showErrorCorrect = true
       } else {
         this.showErrorExist = true
       }
@@ -322,6 +328,12 @@ export default {
         this.selectedTicker = null;
       }
       unsubscribeFromTicker(tickerToRemove.name);
+    },
+
+    deleteAll() {
+      this.tickers.forEach(ticker => {
+        this.handleDelete(ticker)
+      })
     },
   },
 
