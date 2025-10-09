@@ -4,9 +4,9 @@ const tickersHandlers = new Map();
 const socket = new WebSocket(`wss://data-streamer.coindesk.com/?api_key=${API_KEY}`);
 
 socket.addEventListener('message', (event) => {
-    const messageContent = JSON.parse(event.data);
+    // const messageContent = JSON.parse(event.data);
     const { TYPE: type, VALUE: newPrice, INSTRUMENT: key} = JSON.parse(event.data);
-    console.log(messageContent);
+    // console.log(messageContent);
 
     if(type !== '1101' || newPrice === undefined ) {
         return;
