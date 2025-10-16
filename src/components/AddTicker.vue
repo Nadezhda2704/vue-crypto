@@ -45,8 +45,7 @@
     props: {
       assets: {
         type: Array,
-        required: true,
-        default: () => []
+        required: true
       },
       showErrorExist: {
         type: Boolean,
