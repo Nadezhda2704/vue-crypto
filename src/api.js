@@ -1,4 +1,4 @@
-const API_KEY = '097a6402039c557407d72d752da172289d6195a6d4747bd1d95bed9ca76172dc';
+const API_KEY = 'b0dfb8d6698683d8a273e7d25bd839e184fa755798b665a2f7ff4ce12cec4f76';
 
 const tickersHandlers = new Map();
 const socket = new WebSocket(`wss://data-streamer.coindesk.com/?api_key=${API_KEY}`);
