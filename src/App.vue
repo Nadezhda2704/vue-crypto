@@ -100,11 +100,11 @@
       <hr class="w-full border-t border-gray-600 my-4" />
     </template>
 
-    <div>
+    <div  v-if="selectedTicker">
       <ticker-graph
           @close-graph="selectedTicker = null"
+          :priceCurrentTicker="priceCurrentTicker"
           :selectedTicker="selectedTicker"
-          :normalizedGraph="normalizedGraph"
       ></ticker-graph>
     </div>
   </div>
@@ -131,9 +131,8 @@ export default {
       selectedTicker: null,
       showErrorExist: false,
       assets: [],
-      graph: [],
       page: 1,
-      maxGraphElements: 100
+      priceCurrentTicker: 0,
     }
   },
 
@@ -162,18 +161,11 @@ export default {
     }
   },
 
-  mounted() {
-    window.addEventListener('resize', this.calculateMaxGraphElements);
-  },
-
-  beforeUnmount() {
-    window.removeEventListener('resize', this.calculateMaxGraphElements);
-  },
-
   computed: {
     start() {
       return (this.page - 1)*6
     },
+
     end() {
       return this.page*6
     },
@@ -191,49 +183,24 @@ export default {
       return this.filteredTickers.length > this.end
     },
 
-    normalizedGraph() {
-      const maxValue = Math.max(...this.graph)
-      const minValue = Math.min(...this.graph)
-
-      if( maxValue === minValue ) {
-        return this.graph.map(() => 50)
-      }
-
-      return this.graph.map((item) => {
-        return 5 + ( (item - minValue) * 95 ) / (maxValue - minValue)
-      })
-    },
-
     pageStateOptions() {
       return {
         filter: this.filter,
         page: this.page
       };
     }
-
   },
 
   methods: {
-    calculateMaxGraphElements() {
-      if(!this.$refs.graph) return;
-      this.maxGraphElements = this.$refs.graph.clientWidth / 38;
-    },
     updateTicker(tickerName, price) {
       this.tickers
         .filter(t => t.name === tickerName)
         .forEach(t => {
           if (t === this.selectedTicker) {
-            this.graph.push(price);
-            if(this.graph.length > this.maxGraphElements) {
-              this.graph = this.graph.slice(-this.maxGraphElements)
-            }
+            this.priceCurrentTicker = price;
           }
           t.price = price;
         });
-    },
-
-    updateTickerPrices( price) {
-      console.log('price', price)
     },
 
     async getAssets() {
@@ -270,7 +237,6 @@ export default {
 
     select(ticker) {
       this.selectedTicker = ticker;
-      this.$nextTick().then(this.calculateMaxGraphElements)
     },
 
     handleDelete(tickerToRemove) {

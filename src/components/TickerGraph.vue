@@ -46,17 +46,63 @@
         type: Object,
         required: true
       },
-      normalizedGraph: {
-        type: Array,
+      priceCurrentTicker: {
+        type: Number,
         required: true,
       }
     },
+
     emits: {
       'close-graph': true,
     },
+
+    data() {
+      return {
+        graph: [],
+        maxGraphElements: 1
+      }
+    },
+
+    mounted() {
+      this.$nextTick().then(this.calculateMaxGraphElements)
+      window.addEventListener('resize', this.calculateMaxGraphElements);
+    },
+
+    beforeUnmount() {
+      window.removeEventListener('resize', this.calculateMaxGraphElements);
+    },
+
+    computed: {
+      normalizedGraph() {
+        const maxValue = Math.max(...this.graph)
+        const minValue = Math.min(...this.graph)
+
+        if( maxValue === minValue ) {
+          return this.graph.map(() => 50)
+        }
+
+        return this.graph.map((item) => {
+          return 5 + ( (item - minValue) * 95 ) / (maxValue - minValue)
+        })
+      },
+    },
+
     methods: {
+      calculateMaxGraphElements() {
+        if(!this.$refs.graph) return;
+        this.maxGraphElements = this.$refs.graph.clientWidth / 38;
+      },
       close() {
         this.$emit('close-graph');
+      }
+    },
+
+    watch: {
+      priceCurrentTicker() {
+        this.graph.push(this.priceCurrentTicker);
+        if(this.graph.length > this.maxGraphElements) {
+          this.graph = this.graph.slice(-this.maxGraphElements)
+        }
       }
     }
   }
