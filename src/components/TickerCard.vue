@@ -18,7 +18,7 @@
     <div class="w-full border-t border-gray-200"></div>
 
     <button
-    @click.stop="$emit('delete-ticker')"
+    @click.stop="beforeDeleteElement()"
     class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
   >
     <svg
@@ -38,11 +38,19 @@
   </button>
 
   </div>
+  <ConfirmModal
+      v-if="showModal"
+      @confirmAndClose="deleteElement"
+      @closeModal="showModal = false"
+  ></ConfirmModal>
 </template>
 
 <script>
+  import ConfirmModal from "@/components/ConfirmModal.vue";
+
   export default {
-    name: "TickerCard",
+    name: 'TickerCard',
+    components: {ConfirmModal},
 
     props: {
       selectedTicker: {
@@ -59,6 +67,12 @@
       'delete-ticker': true,
     },
 
+    data() {
+      return {
+        showModal: false,
+      }
+    },
+
     methods: {
       formatPrice(price) {
         if(price === '-') {
@@ -66,6 +80,14 @@
         }
         return price > 1 ? price.toFixed(2) : price.toPrecision(2)
       },
+
+      beforeDeleteElement() {
+        this.showModal = true;
+      },
+      deleteElement() {
+        this.showModal = false;
+        this.$emit('delete-ticker')
+      }
     }
   }
 </script>
